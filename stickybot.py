@@ -7,16 +7,23 @@ import time
 from collections import deque
 import queue
 
-VERSION = "v1.07"
+VERSION = "v1.09"
 WAIT = 0.5 # maximum time to wait for a command to clear
 
 def strip_color(s):
-    return re.sub("(?:\x03[0-9]{1,2}(?:,[0-9]{1,2})|\x02|\x0b|\x0f|\x1d|\x1f)",
+    return re.sub("(?:\x03[0-9]{1,2}(?:,[0-9]{1,2})?|\x02|\x0b|\x0f|\x1d|\x1f)",
                   "", s)
 
 def peek_command(s):
     if s.startswith(":"): s = s.partition(" ")[2]
     return s.partition(" ")[0]
+
+def decode(s):
+    """Tries to decode a string accurately"""
+    try:
+        return s.decode("utf-8")
+    except UnicodeDecodeError:
+        return s.decode("windows-1252", "replace")
 
 
 class SocketHandler(object):
@@ -83,10 +90,11 @@ class SocketHandler(object):
                 if _ != b'\n': break
                 with open("debug_rawirc.txt", "ab") as f:
                     f.write(l+b'\n')
-                    if self.cb.verbose: sys.stderr.write(l.decode("utf-8")+'\n')
+                    if self.cb.verbose:
+                        sys.stderr.write(decode(l)+'\n')
                 l = l.rstrip(b'\r')
                 # deal with pingpong
-                cmd = peek_command(l.decode("utf-8"))
+                cmd = peek_command(decode(l))
                 if cmd == "PING": self.send(Line(l).pong())
                 elif cmd == "001" and not self.cb.ready:
                     self.cb.ready = True
@@ -111,7 +119,7 @@ class SocketHandler(object):
             if not to_send.throttle or \
                time.time() - send_ts > self.cb.cooldown:
                 try:
-                    self.sock.send(bytes(to_send.l+"\r\n", "utf-8"))
+                    self.sock.send(bytes(to_send.l+"\r\n", "utf-8", "ignore"))
                     if self.cb.verbose: sys.stderr.write(to_send.l+'\n')
                 except socket.error:
 ##                        self.send_queue.task_done()
@@ -129,7 +137,7 @@ class SocketHandler(object):
     def peek(self):
         """Look at the most recent raw data received"""
         if not self.recv_queue: return None
-        return self.recv_queue[0].decode("utf-8")
+        return decode(self.recv_queue[0])
 
     def send(self, l):
         """Adds a line to the sending queue"""
@@ -212,7 +220,7 @@ class OutgoingLine(object):
 class Line(object):
     def __init__(self, l):
         """Parses and stores lines at the same time!"""
-        l = l.decode("utf-8")
+        l = decode(l)
         self.l = l
         self.src = User("__server")
         self.cmd = None
