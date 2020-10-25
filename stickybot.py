@@ -7,8 +7,9 @@ import time
 from collections import deque
 import queue
 
-VERSION = "v1.09"
+VERSION = "v1.10"
 WAIT = 0.5 # maximum time to wait for a command to clear
+DEBUG = False
 
 def strip_color(s):
     return re.sub("(?:\x03[0-9]{1,2}(?:,[0-9]{1,2})?|\x02|\x0b|\x0f|\x1d|\x1f)",
@@ -88,10 +89,11 @@ class SocketHandler(object):
             while True:
                 l, _, self.recv_buffer = self.recv_buffer.partition(b'\n')
                 if _ != b'\n': break
-                with open("debug_rawirc.txt", "ab") as f:
-                    f.write(l+b'\n')
-                    if self.cb.verbose:
-                        sys.stderr.write(decode(l)+'\n')
+                if DEBUG:
+                    with open("debug_rawirc.txt", "ab") as f:
+                        f.write(l+b'\n')
+                        if self.cb.verbose:
+                            sys.stderr.write(decode(l)+'\n')
                 l = l.rstrip(b'\r')
                 # deal with pingpong
                 cmd = peek_command(decode(l))
@@ -121,11 +123,11 @@ class SocketHandler(object):
                 try:
                     self.sock.send(bytes(to_send.l+"\r\n", "utf-8", "ignore"))
                     if self.cb.verbose: sys.stderr.write(to_send.l+'\n')
-                except socket.error:
+                except socket.error as e:
 ##                        self.send_queue.task_done()
                     self.err_closed = True
                     self.kill()
-                    print("net_tx: fatal error")
+                    print("net_tx: fatal error {:d}".format(e.errno))
                 self.send_queue.task_done()
             time.sleep(0.001)
 
